@@ -1,0 +1,64 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}
+    // Fields: uid, displayName, email, photoURL, createdAt
+    //
+    // Collection: /users/{userId}/simulations/{simId}
+    // Fields: userId, name, params, metrics, createdAt
+    //
+    // Collection: /users/{userId}/scenarios/{scenarioId}
+    // Fields: userId, name, simulationId, metrics, createdAt
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.uid == request.auth.uid;
+    }
+
+    function isValidSimulation(data) {
+      return data.keys().hasAll(['userId', 'params', 'metrics', 'createdAt']) &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidScenario(data) {
+      return data.keys().hasAll(['userId', 'name', 'simulationId', 'metrics', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      match /simulations/{simId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /scenarios/{scenarioId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}

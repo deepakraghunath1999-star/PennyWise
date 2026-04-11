@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-teal: #14b8a6;
+  --color-amber: #f59e0b;
+  --color-red: #ef4444;
+  
+  --color-background: #0a0a0a;
+  --color-card: #141414;
+  --color-border: #262626;
+  --color-muted: #737373;
+  --color-accent: #14b8a6;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-zinc-100 font-sans antialiased;
+  }
+}
+
+.glass {
+  @apply bg-card/50 backdrop-blur-xl border border-border;
+}
+
+.card-gradient {
+  background: linear-gradient(135deg, #1a1a1a 0%, #141414 100%);
+}
+
+input[type="range"] {
+  @apply accent-teal;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-border rounded-full hover:bg-zinc-700;
+}
