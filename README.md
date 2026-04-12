@@ -39,7 +39,7 @@ An AI-powered negotiation assistant that identifies wasteful recurring subscript
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Charts**: [Recharts](https://recharts.org/)
 - **Backend/Auth**: [Firebase](https://firebase.google.com/) (Authentication & Firestore)
-- **AI Engine**: [Google Gemini API](https://ai.google.dev/)
+- **AI Engine**: [Groq](https://groq.com/) with Llama 3.3 70B Versatile
 - **File Parsing**: [PDF.js](https://mozilla.github.io/pdf.js/) & [Mammoth](https://github.com/mwilliamson/mammoth.js)
 
 ---
@@ -51,7 +51,7 @@ An AI-powered negotiation assistant that identifies wasteful recurring subscript
 - Node.js (v18 or higher)
 - npm or yarn
 - A Firebase project
-- A Google Gemini API Key
+- A Groq API Key (Llama 3.3 70B Versatile)
 
 ### Installation
 

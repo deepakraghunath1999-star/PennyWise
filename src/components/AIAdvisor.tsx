@@ -137,7 +137,7 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
       let errorMessage = "I encountered an error while analyzing your data. Please try again.";
       
       if (error?.message?.includes('quota') || error?.message?.includes('429')) {
-        errorMessage = "The AI Advisor is currently at its capacity (API Quota Exceeded). You can continue using the simulator, or try again in a few minutes. If you are a developer, you can provide your own Gemini API key in the environment settings.";
+        errorMessage = "The AI Advisor is currently at its capacity (API Quota Exceeded). You can continue using the simulator, or try again in a few minutes. If you are a developer, you can provide your own Groq API key in the environment settings.";
       }
       
       setMessages(prev => [...prev, { role: 'assistant', content: errorMessage }]);

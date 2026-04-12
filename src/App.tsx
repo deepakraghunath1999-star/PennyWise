@@ -33,7 +33,7 @@ import { KPICards } from "@/components/KPICards";
 import { ReadinessScore } from "@/components/ReadinessScore";
 import { FanChart } from "@/components/FanChart";
 import { AIAdvisor } from "@/components/AIAdvisor";
-import { GeminiInsight } from "@/components/GeminiInsight";
+import { GroqInsight } from "@/components/GroqInsight";
 import { MilestoneStrategy } from "@/components/MilestoneStrategy";
 import { WealthLab } from "@/components/WealthLab";
 import { DailyNudge } from "@/components/DailyNudge";
@@ -360,7 +360,7 @@ export default function App() {
               {activeTab === 'simulator' && (
                 <div className="max-w-7xl mx-auto space-y-8">
                   <DailyNudge onClick={() => setActiveTab('advisor')} />
-                  <GeminiInsight result={result} lastRunTimestamp={lastRunTimestamp} onInsightGenerated={setAiInsight} />
+                  <GroqInsight result={result} lastRunTimestamp={lastRunTimestamp} onInsightGenerated={setAiInsight} />
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-8">
                     <KPICards result={result} />

@@ -3,13 +3,13 @@ import { Sparkles, Loader2, AlertCircle } from "lucide-react";
 import { SimulationResult } from "@/lib/monteCarlo";
 import { cn } from "@/lib/utils";
 
-interface GeminiInsightProps {
+interface GroqInsightProps {
   result: SimulationResult | null;
   lastRunTimestamp?: number;
   onInsightGenerated?: (insight: string) => void;
 }
 
-export function GeminiInsight({ result, lastRunTimestamp, onInsightGenerated }: GeminiInsightProps) {
+export function GroqInsight({ result, lastRunTimestamp, onInsightGenerated }: GroqInsightProps) {
   const [insight, setInsight] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
