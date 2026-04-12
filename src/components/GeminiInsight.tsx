@@ -1,27 +1,25 @@
 import { useState, useEffect } from "react";
 import { Sparkles, Loader2, AlertCircle } from "lucide-react";
-import { GoogleGenAI } from "@google/genai";
 import { SimulationResult } from "@/lib/monteCarlo";
 import { cn } from "@/lib/utils";
 
 interface GeminiInsightProps {
   result: SimulationResult | null;
+  lastRunTimestamp?: number;
 }
 
-export function GeminiInsight({ result }: GeminiInsightProps) {
+export function GeminiInsight({ result, lastRunTimestamp }: GeminiInsightProps) {
   const [insight, setInsight] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!result) return;
+    if (!result || !lastRunTimestamp) return;
 
     const generateInsight = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
         const prompt = `
           As a financial expert, give a 1-sentence punchy insight for this retirement simulation:
           - Success Rate: ${result.successRate.toFixed(1)}%
@@ -33,12 +31,18 @@ export function GeminiInsight({ result }: GeminiInsightProps) {
           Focus on the most critical action or observation. Be direct.
         `;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: prompt
+        const res = await fetch("/api/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: prompt }]
+          })
         });
+
+        if (!res.ok) throw new Error("Failed to call AI");
+        const data = await res.json();
         
-        setInsight(response.text || "Keep optimizing your plan.");
+        setInsight(data.text || "Keep optimizing your plan.");
       } catch (err: any) {
         console.error("Insight Error:", err);
         let msg = "Could not generate insight.";
@@ -53,7 +57,7 @@ export function GeminiInsight({ result }: GeminiInsightProps) {
 
     const timer = setTimeout(generateInsight, 1000); // Debounce
     return () => clearTimeout(timer);
-  }, [result]);
+  }, [result, lastRunTimestamp]);
 
   if (!result) return null;
 
@@ -68,7 +72,7 @@ export function GeminiInsight({ result }: GeminiInsightProps) {
       </div>
       <div className="flex-1">
         <div className="text-[10px] font-bold text-teal uppercase tracking-widest mb-0.5 flex items-center gap-1.5">
-          Gemini AI Insight
+          Groq AI Insight
           {isLoading && <span className="inline-block w-1 h-1 rounded-full bg-teal animate-ping" />}
         </div>
         <p className={cn(

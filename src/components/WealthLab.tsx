@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, ChangeEvent } from "react";
 import { 
   Zap, 
   TrendingUp, 
@@ -18,11 +18,17 @@ import {
   CreditCard,
   Building2,
   RefreshCw,
-  BellRing
+  BellRing,
+  Upload,
+  FileText
 } from "lucide-react";
+import * as pdfjsLib from 'pdfjs-dist';
+import mammoth from 'mammoth';
+
+// Set up pdfjs worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 import { cn } from "@/lib/utils";
 import { SimulationInput, SimulationResult } from "@/lib/monteCarlo";
-import { GoogleGenAI } from "@google/genai";
 import { motion, AnimatePresence } from "motion/react";
 
 interface WealthLabProps {
@@ -40,7 +46,6 @@ export function WealthLab({ params, result, onUpdateParams }: WealthLabProps) {
     { id: 'nudges', label: 'Nudge Engine', icon: Zap, color: 'text-teal', bg: 'bg-teal/10' },
     { id: 'income', label: 'Income Growth', icon: TrendingUp, color: 'text-amber', bg: 'bg-amber/10' },
     { id: 'link', label: 'Bank Link', icon: LinkIcon, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-    { id: 'debt', label: 'Debt Accelerator', icon: Flame, color: 'text-red', bg: 'bg-red/10' },
     { id: 'expenses', label: 'Expense Audit', icon: ShieldAlert, color: 'text-blue-400', bg: 'bg-blue-400/10' },
   ];
 
@@ -97,7 +102,6 @@ export function WealthLab({ params, result, onUpdateParams }: WealthLabProps) {
             {activeTool === 'nudges' && <NudgeEngine params={params} result={result} onXpGain={(amt) => setXp(prev => prev + amt)} onUpdateParams={onUpdateParams} />}
             {activeTool === 'income' && <IncomeOptimizer params={params} result={result} />}
             {activeTool === 'link' && <BankLink params={params} onUpdateParams={onUpdateParams} onXpGain={(amt) => setXp(prev => prev + amt)} />}
-            {activeTool === 'debt' && <DebtAccelerator params={params} result={result} />}
             {activeTool === 'expenses' && <ExpenseOptimizer params={params} result={result} />}
           </motion.div>
         </AnimatePresence>
@@ -154,7 +158,6 @@ function NudgeEngine({ params, result, onXpGain, onUpdateParams }: NudgeEnginePr
     if (!transactionMessage.trim()) return;
     setIsParsing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
       const prompt = `
         Analyze this bank transaction message and provide a financial nudge:
         Message: "${transactionMessage}"
@@ -173,15 +176,38 @@ function NudgeEngine({ params, result, onXpGain, onUpdateParams }: NudgeEnginePr
           "habitToComplete": "spending" | "budget" | null,
           "isSalary": boolean
         }
+        
+        IMPORTANT: ONLY RETURN THE JSON OBJECT. NO MARKDOWN.
       `;
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
+
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }]
+        })
       });
+
+      if (!res.ok) throw new Error("Failed to call AI");
+      const aiData = await res.json();
       
-      const text = response.text || "{}";
+      const text = aiData.text || "{}";
       const cleaned = text.replace(/```json|```/g, "").trim();
-      const data = JSON.parse(cleaned);
+      let data;
+      try {
+        data = JSON.parse(cleaned);
+      } catch (e) {
+        // Fallback if AI didn't return clean JSON
+        data = {
+          type: "insight",
+          message: text.slice(0, 100),
+          impact: "Unknown",
+          category: "Other",
+          amount: 0,
+          habitToComplete: null,
+          isSalary: false
+        };
+      }
       
       const newNudge = {
         ...data,
@@ -395,42 +421,36 @@ function NudgeEngine({ params, result, onXpGain, onUpdateParams }: NudgeEnginePr
           <h3 className="text-sm font-bold uppercase tracking-widest text-muted px-2">Smart Notifications</h3>
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
-              {liveNudges.map((nudge, i) => (
-                <motion.div 
-                  key={`live-${i}`}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  className="p-5 rounded-3xl bg-teal/5 border border-teal/20 flex items-start gap-4 shadow-sm"
-                >
-                  <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border bg-teal/10 border-teal/20")}>
-                    <nudge.icon className={cn("w-5 h-5", nudge.color)} />
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-zinc-200 font-bold leading-relaxed">{nudge.message}</p>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal/20 text-teal font-bold uppercase">Live</span>
+              {liveNudges.length === 0 ? (
+                <div className="p-8 text-center glass rounded-3xl border-dashed">
+                  <BellRing className="w-8 h-8 text-muted mx-auto mb-3 opacity-20" />
+                  <p className="text-xs text-muted">No smart notifications yet. Use the Transaction Catcher to generate insights.</p>
+                </div>
+              ) : (
+                liveNudges.map((nudge, i) => (
+                  <motion.div 
+                    key={`live-${i}`}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="p-5 rounded-3xl bg-teal/5 border border-teal/20 flex items-start gap-4 shadow-sm"
+                  >
+                    <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border bg-teal/10 border-teal/20")}>
+                      <nudge.icon className={cn("w-5 h-5", nudge.color)} />
                     </div>
-                    {nudge.impact && (
-                      <p className="text-[10px] font-bold text-teal uppercase tracking-widest">Impact: {nudge.impact}</p>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-zinc-200 font-bold leading-relaxed">{nudge.message}</p>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-teal/20 text-teal font-bold uppercase">Live</span>
+                      </div>
+                      {nudge.impact && (
+                        <p className="text-[10px] font-bold text-teal uppercase tracking-widest">Impact: {nudge.impact}</p>
+                      )}
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </AnimatePresence>
-            {nudges.map((nudge, i) => (
-              <div key={i} className="p-5 rounded-3xl glass border border-border flex items-start gap-4 hover:bg-zinc-900/50 transition-all">
-                <div className={cn("w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border", nudge.color.replace('text-', 'bg-').replace('text-', 'border-') + '/10 border-' + nudge.color.split('-')[1] + '/20')}>
-                  <nudge.icon className={cn("w-5 h-5", nudge.color)} />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-zinc-200 leading-relaxed">{nudge.message}</p>
-                  {nudge.impact && (
-                    <p className="text-[10px] font-bold text-teal uppercase tracking-widest">Impact: {nudge.impact}</p>
-                  )}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </div>
@@ -442,6 +462,56 @@ function IncomeOptimizer({ params, result }: WealthLabProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any | null>(null);
   const [resumeText, setResumeText] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const reader = new FileReader();
+      
+      if (file.type === "application/pdf") {
+        reader.onload = async (event) => {
+          const typedarray = new Uint8Array(event.target?.result as ArrayBuffer);
+          const pdf = await pdfjsLib.getDocument(typedarray).promise;
+          let fullText = "";
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map((item: any) => item.str).join(" ");
+            fullText += pageText + "\n";
+          }
+          setResumeText(fullText);
+          setIsUploading(false);
+        };
+        reader.readAsArrayBuffer(file);
+      } else if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+        reader.onload = async (event) => {
+          const arrayBuffer = event.target?.result as ArrayBuffer;
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          setResumeText(result.value);
+          setIsUploading(false);
+        };
+        reader.readAsArrayBuffer(file);
+      } else if (file.type === "text/plain") {
+        reader.onload = (event) => {
+          setResumeText(event.target?.result as string);
+          setIsUploading(false);
+        };
+        reader.readAsText(file);
+      } else {
+        alert("Unsupported file type. Please upload PDF, DOCX, or TXT.");
+        setIsUploading(false);
+      }
+    } catch (err) {
+      console.error("File upload error:", err);
+      alert("Error reading file.");
+      setIsUploading(false);
+    }
+  };
 
   const runAnalysis = async (specificSection?: string) => {
     if (!resumeText.trim()) {
@@ -450,7 +520,6 @@ function IncomeOptimizer({ params, result }: WealthLabProps) {
     }
     setIsAnalyzing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
       const prompt = `
         As a world-class career strategist and income growth expert, analyze this user's resume for maximum wealth multiplication:
         
@@ -500,12 +569,19 @@ function IncomeOptimizer({ params, result }: WealthLabProps) {
         
         ${specificSection ? `ONLY return the section with id: "${specificSection}" inside the sections array.` : ""}
       `;
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
+
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }]
+        })
       });
+
+      if (!res.ok) throw new Error("Failed to call AI");
+      const aiData = await res.json();
       
-      const text = response.text || "{}";
+      const text = aiData.text || "{}";
       const cleaned = text.replace(/```json|```/g, "").trim();
       const data = JSON.parse(cleaned);
       setAnalysis(data);
@@ -534,20 +610,45 @@ function IncomeOptimizer({ params, result }: WealthLabProps) {
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-bold uppercase tracking-widest text-muted">Paste Resume / Profile Text</label>
+            <div className="flex items-center gap-4">
+              <label className="text-xs font-bold uppercase tracking-widest text-muted">Resume / Profile</label>
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept=".pdf,.docx,.txt"
+                className="hidden"
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 border border-border text-[10px] font-bold text-amber uppercase tracking-widest hover:bg-zinc-800 transition-all disabled:opacity-50"
+              >
+                {isUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                {isUploading ? "Reading File..." : "Upload PDF/DOCX"}
+              </button>
+            </div>
             {resumeText && (
               <button onClick={() => setResumeText("")} className="text-[10px] text-red hover:underline font-bold uppercase">Clear</button>
             )}
           </div>
-          <textarea 
-            value={resumeText}
-            onChange={(e) => setResumeText(e.target.value)}
-            placeholder="Paste your resume, LinkedIn profile text, or job description here..."
-            className="w-full h-48 bg-zinc-900 border border-border rounded-2xl px-6 py-4 text-sm focus:border-amber/50 transition-all resize-none shadow-inner"
-          />
+          <div className="relative">
+            <textarea 
+              value={resumeText}
+              onChange={(e) => setResumeText(e.target.value)}
+              placeholder="Paste your resume or upload a file above..."
+              className="w-full h-48 bg-zinc-900 border border-border rounded-2xl px-6 py-4 text-sm focus:border-amber/50 transition-all resize-none shadow-inner"
+            />
+            {resumeText && !isUploading && (
+              <div className="absolute top-4 right-4 flex items-center gap-2 px-2 py-1 rounded bg-teal/10 border border-teal/20">
+                <FileText className="w-3 h-3 text-teal" />
+                <span className="text-[8px] font-bold text-teal uppercase tracking-widest">Text Loaded</span>
+              </div>
+            )}
+          </div>
           <button 
             onClick={() => runAnalysis()}
-            disabled={isAnalyzing || !resumeText.trim()}
+            disabled={isAnalyzing || !resumeText.trim() || isUploading}
             className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-amber text-black rounded-xl font-bold hover:bg-amber/90 transition-all disabled:opacity-50 shadow-lg shadow-amber/10"
           >
             {isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
@@ -745,127 +846,6 @@ function BankLink({ params, onUpdateParams, onXpGain }: { params: SimulationInpu
   );
 }
 
-function DebtAccelerator({ params, result }: WealthLabProps) {
-  const [debtAmount, setDebtAmount] = useState(25000);
-  const [interestRate, setInterestRate] = useState(18);
-  const [monthlyPayment, setMonthlyPayment] = useState(800);
-  const [activeStrategy, setActiveStrategy] = useState<string | null>(null);
-  const [enabledAutomations, setEnabledAutomations] = useState<string[]>([]);
-
-  const handleApplyStrategy = (strategy: string) => {
-    setActiveStrategy(strategy);
-  };
-
-  const toggleAutomation = (id: string) => {
-    setEnabledAutomations(prev => 
-      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
-    );
-  };
-
-  const monthsToPayoff = Math.ceil(debtAmount / (monthlyPayment - (debtAmount * (interestRate / 100 / 12))));
-  const totalInterest = (monthlyPayment * monthsToPayoff) - debtAmount;
-
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 p-8 rounded-3xl glass border border-border space-y-6">
-          <h3 className="text-xl font-bold">Debt Profile</h3>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-muted uppercase tracking-widest">Total Debt</label>
-              <input 
-                type="number" 
-                value={debtAmount} 
-                onChange={(e) => setDebtAmount(Number(e.target.value))}
-                className="w-full bg-zinc-900 border border-border rounded-xl px-4 py-3 text-sm"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-muted uppercase tracking-widest">Interest Rate (%)</label>
-              <input 
-                type="number" 
-                value={interestRate} 
-                onChange={(e) => setInterestRate(Number(e.target.value))}
-                className="w-full bg-zinc-900 border border-border rounded-xl px-4 py-3 text-sm"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-muted uppercase tracking-widest">Monthly Payment</label>
-              <input 
-                type="number" 
-                value={monthlyPayment} 
-                onChange={(e) => setMonthlyPayment(Number(e.target.value))}
-                className="w-full bg-zinc-900 border border-border rounded-xl px-4 py-3 text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:col-span-2 space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-6 rounded-3xl bg-red/5 border border-red/20 space-y-2">
-              <p className="text-xs font-bold text-red/60 uppercase tracking-widest">Time to Debt Free</p>
-              <p className="text-4xl font-bold text-red">{monthsToPayoff} <span className="text-lg">Months</span></p>
-            </div>
-            <div className="p-6 rounded-3xl bg-amber/5 border border-amber/20 space-y-2">
-              <p className="text-xs font-bold text-amber/60 uppercase tracking-widest">Total Interest Paid</p>
-              <p className="text-4xl font-bold text-amber">${totalInterest.toLocaleString()}</p>
-            </div>
-          </div>
-
-          <div className="p-8 rounded-3xl glass border border-border">
-            <h3 className="text-lg font-bold mb-6">Psychological Wins Accelerator</h3>
-            <div className="space-y-4">
-              <div className={cn(
-                "flex items-center gap-4 p-4 rounded-2xl border transition-all",
-                activeStrategy === 'avalanche' ? "bg-teal/5 border-teal/20" : "bg-zinc-900/50 border-border"
-              )}>
-                <div className="w-10 h-10 rounded-xl bg-teal/10 border border-teal/20 flex items-center justify-center">
-                  <Flame className="w-5 h-5 text-teal" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold">Avalanche Strategy</p>
-                  <p className="text-xs text-muted">Prioritizing high interest saves you $4,200 more than Snowball.</p>
-                </div>
-                <button 
-                  onClick={() => handleApplyStrategy('avalanche')}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                    activeStrategy === 'avalanche' ? "bg-teal text-white" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                  )}
-                >
-                  {activeStrategy === 'avalanche' ? 'Active' : 'Apply'}
-                </button>
-              </div>
-              <div className={cn(
-                "flex items-center gap-4 p-4 rounded-2xl border transition-all",
-                enabledAutomations.includes('roundup') ? "bg-amber/5 border-amber/20" : "bg-zinc-900/50 border-border"
-              )}>
-                <div className="w-10 h-10 rounded-xl bg-amber/10 border border-amber/20 flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-amber" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold">Round-up Automation</p>
-                  <p className="text-xs text-muted">Round up every purchase to pay off debt 4 months faster.</p>
-                </div>
-                <button 
-                  onClick={() => toggleAutomation('roundup')}
-                  className={cn(
-                    "px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                    enabledAutomations.includes('roundup') ? "bg-amber text-black" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                  )}
-                >
-                  {enabledAutomations.includes('roundup') ? 'Enabled' : 'Enable'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ExpenseOptimizer({ params, result }: WealthLabProps) {
   const [isAuditing, setIsAuditing] = useState(false);
   const [audit, setAudit] = useState<string | null>(null);
@@ -873,7 +853,6 @@ function ExpenseOptimizer({ params, result }: WealthLabProps) {
   const runAudit = async () => {
     setIsAuditing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
       const prompt = `
         As an expense optimization expert and AI negotiation assistant, audit these potential expenses:
         - Monthly Income: $${(params.annualIncome / 12).toLocaleString()}
@@ -886,11 +865,19 @@ function ExpenseOptimizer({ params, result }: WealthLabProps) {
         
         Format with professional markdown.
       `;
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
+
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }]
+        })
       });
-      setAudit(response.text || "Audit unavailable.");
+
+      if (!res.ok) throw new Error("Failed to call AI");
+      const aiData = await res.json();
+      
+      setAudit(aiData.text || "Audit unavailable.");
     } catch (err: any) {
       console.error(err);
       let msg = "Error running audit.";

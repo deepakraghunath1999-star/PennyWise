@@ -56,7 +56,7 @@ export default function App() {
 
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('simulator');
-  const [isAutoRunning, setIsAutoRunning] = useState(true);
+  const [isAutoRunning, setIsAutoRunning] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [simHistory, setSimHistory] = useState<any[]>([]);
   const [scenarios, setScenarios] = useState<any[]>([]);
@@ -64,6 +64,7 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [showScenarioModal, setShowScenarioModal] = useState(false);
   const [newScenarioName, setNewScenarioName] = useState("");
+  const [lastRunTimestamp, setLastRunTimestamp] = useState<number>(0);
 
   const handleRun = useCallback(async () => {
     try {
@@ -74,10 +75,12 @@ export default function App() {
       });
       const res = await response.json();
       setResult(res);
+      setLastRunTimestamp(Date.now());
     } catch (error) {
       console.error("Simulation API Error:", error);
       const res = runSimulation(params);
       setResult(res);
+      setLastRunTimestamp(Date.now());
     }
   }, [params]);
 
@@ -87,10 +90,6 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [params, isAutoRunning, handleRun]);
-
-  useEffect(() => {
-    handleRun();
-  }, []);
 
   // Listen to History and Scenarios
   useEffect(() => {
@@ -208,7 +207,7 @@ export default function App() {
       <div className="h-screen w-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Zap className="w-12 h-12 text-teal animate-pulse" />
-          <div className="text-muted font-mono text-sm">Initializing RetireSim AI...</div>
+          <div className="text-muted font-mono text-sm">Initializing PennyWise...</div>
         </div>
       </div>
     );
@@ -225,7 +224,7 @@ export default function App() {
           <div className="w-8 h-8 bg-teal rounded-lg flex items-center justify-center shadow-lg shadow-teal/20 shrink-0">
             <Zap className="w-5 h-5 text-white fill-white" />
           </div>
-          {sidebarOpen && <span className="font-bold text-xl tracking-tight">RetireSim AI</span>}
+          {sidebarOpen && <span className="font-bold text-xl tracking-tight">PennyWise</span>}
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
@@ -351,7 +350,7 @@ export default function App() {
               {activeTab === 'simulator' && (
                 <div className="max-w-7xl mx-auto space-y-8">
                   <DailyNudge onClick={() => setActiveTab('advisor')} />
-                  <GeminiInsight result={result} />
+                  <GeminiInsight result={result} lastRunTimestamp={lastRunTimestamp} />
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-8">
                     <KPICards result={result} />
@@ -396,86 +395,102 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'milestones' && result && (
+            {activeTab === 'milestones' && (
               <div className="max-w-4xl mx-auto space-y-8 pb-20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold">Financial Roadmap</h2>
-                    <p className="text-muted text-sm">Your journey to financial independence, step by step.</p>
+                {!result ? (
+                  <div className="p-12 text-center glass rounded-[2.5rem] border-dashed">
+                    <Target className="w-12 h-12 text-muted mx-auto mb-4 opacity-20" />
+                    <h3 className="text-xl font-bold mb-2">Simulation Required</h3>
+                    <p className="text-muted text-sm max-w-xs mx-auto mb-8">Run your simulation in the Simulator tab to generate your personalized financial roadmap.</p>
+                    <button 
+                      onClick={() => setActiveTab('simulator')}
+                      className="px-6 py-3 bg-teal text-white rounded-xl font-bold hover:bg-teal/90 transition-all"
+                    >
+                      Go to Simulator
+                    </button>
                   </div>
-                  <div className="px-4 py-2 rounded-xl bg-teal/10 border border-teal/20 text-teal text-xs font-bold">
-                    {result.readinessScore}% Ready
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-2xl font-bold">Financial Roadmap</h2>
+                        <p className="text-muted text-sm">Your journey to financial independence, step by step.</p>
+                      </div>
+                      <div className="px-4 py-2 rounded-xl bg-teal/10 border border-teal/20 text-teal text-xs font-bold">
+                        {result.readinessScore}% Ready
+                      </div>
+                    </div>
 
-                <div className="space-y-6">
-                  {[
-                    { label: "Emergency Fund (3 Months)", target: (Number(params.annualIncome || 0) / 12) * 3, icon: Zap, desc: "Safety net for unexpected expenses." },
-                    { label: "First $100K Milestone", target: 100000, icon: Target, desc: "The hardest milestone in wealth building." },
-                    { label: "Coast FIRE", target: result.requiredNestEgg * 0.4, icon: TrendingUp, desc: "No more contributions needed to retire at 65." },
-                    { label: "Lean FIRE", target: result.requiredNestEgg * 0.7, icon: Sparkles, desc: "Basic expenses covered by investments." },
-                    { label: "Financial Independence", target: result.requiredNestEgg, icon: Target, desc: "Your ultimate nest egg goal." },
-                  ].map((milestone, i) => {
-                    const path = result.pctPaths.p50;
-                    const achievement = path.find(p => p.balance >= milestone.target);
-                    const progress = Math.min(100, (result.currentSavings / milestone.target) * 100);
-                    const isAchieved = result.currentSavings >= milestone.target;
-                    
-                    return (
-                      <div key={i} className={cn(
-                        "p-6 rounded-3xl glass border transition-all duration-500",
-                        isAchieved ? "border-teal/30 bg-teal/5" : "border-border hover:border-zinc-700"
-                      )}>
-                        <div className="flex items-center gap-6">
-                          <div className={cn(
-                            "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500",
-                            isAchieved ? "bg-teal text-white border-teal shadow-lg shadow-teal/20" : "bg-zinc-900 border-border text-muted"
+                    <div className="space-y-6">
+                      {[
+                        { label: "Emergency Fund (3 Months)", target: (Number(params.annualIncome || 0) / 12) * 3, icon: Zap, desc: "Safety net for unexpected expenses." },
+                        { label: "First $100K Milestone", target: 100000, icon: Target, desc: "The hardest milestone in wealth building." },
+                        { label: "Coast FIRE", target: result.requiredNestEgg * 0.4, icon: TrendingUp, desc: "No more contributions needed to retire at 65." },
+                        { label: "Lean FIRE", target: result.requiredNestEgg * 0.7, icon: Sparkles, desc: "Basic expenses covered by investments." },
+                        { label: "Financial Independence", target: result.requiredNestEgg, icon: Target, desc: "Your ultimate nest egg goal." },
+                      ].map((milestone, i) => {
+                        const path = result.pctPaths.p50;
+                        const achievement = path.find(p => p.balance >= milestone.target);
+                        const progress = Math.min(100, (params.currentSavings / milestone.target) * 100);
+                        const isAchieved = params.currentSavings >= milestone.target;
+                        
+                        return (
+                          <div key={i} className={cn(
+                            "p-6 rounded-3xl glass border transition-all duration-500",
+                            isAchieved ? "border-teal/30 bg-teal/5" : "border-border hover:border-zinc-700"
                           )}>
-                            <milestone.icon className="w-7 h-7" />
-                          </div>
-                          <div className="flex-1 space-y-3">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h4 className="font-bold text-lg text-zinc-100">{milestone.label}</h4>
-                                  {isAchieved && <div className="px-2 py-0.5 rounded-full bg-teal/20 text-teal text-[10px] font-bold uppercase">Achieved</div>}
-                                </div>
-                                <p className="text-xs text-muted">{milestone.desc}</p>
+                            <div className="flex items-center gap-6">
+                              <div className={cn(
+                                "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500",
+                                isAchieved ? "bg-teal text-white border-teal shadow-lg shadow-teal/20" : "bg-zinc-900 border-border text-muted"
+                              )}>
+                                <milestone.icon className="w-7 h-7" />
                               </div>
-                              <div className="text-right">
-                                <div className="text-xs text-muted font-mono uppercase tracking-widest">Target</div>
-                                <div className="text-sm font-bold text-zinc-100">{formatCurrency(milestone.target)}</div>
-                                {achievement && !isAchieved && (
-                                  <div className="text-[10px] text-teal font-bold mt-1">Est. Age {achievement.age}</div>
+                              <div className="flex-1 space-y-3">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-bold text-lg text-zinc-100">{milestone.label}</h4>
+                                      {isAchieved && <div className="px-2 py-0.5 rounded-full bg-teal/20 text-teal text-[10px] font-bold uppercase">Achieved</div>}
+                                    </div>
+                                    <p className="text-xs text-muted">{milestone.desc}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-xs text-muted font-mono uppercase tracking-widest">Target</div>
+                                    <div className="text-sm font-bold text-zinc-100">{formatCurrency(milestone.target)}</div>
+                                    {achievement && !isAchieved && (
+                                      <div className="text-[10px] text-teal font-bold mt-1">Est. Age {achievement.age}</div>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted">
+                                    <span>Progress</span>
+                                    <span>{progress.toFixed(0)}%</span>
+                                  </div>
+                                  <div className="h-2.5 w-full bg-zinc-900 rounded-full overflow-hidden border border-border/50 p-0.5">
+                                    <div 
+                                      className={cn(
+                                        "h-full rounded-full transition-all duration-1000 ease-out",
+                                        isAchieved ? "bg-teal" : "bg-zinc-700"
+                                      )} 
+                                      style={{ width: `${progress}%` }} 
+                                    />
+                                  </div>
+                                </div>
+
+                                {!isAchieved && (
+                                  <MilestoneStrategy milestone={milestone} result={result} />
                                 )}
                               </div>
                             </div>
-                            
-                            <div className="space-y-1.5">
-                              <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted">
-                                <span>Progress</span>
-                                <span>{progress.toFixed(0)}%</span>
-                              </div>
-                              <div className="h-2.5 w-full bg-zinc-900 rounded-full overflow-hidden border border-border/50 p-0.5">
-                                <div 
-                                  className={cn(
-                                    "h-full rounded-full transition-all duration-1000 ease-out",
-                                    isAchieved ? "bg-teal" : "bg-zinc-700"
-                                  )} 
-                                  style={{ width: `${progress}%` }} 
-                                />
-                              </div>
-                            </div>
-
-                            {!isAchieved && (
-                              <MilestoneStrategy milestone={milestone} result={result} />
-                            )}
                           </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

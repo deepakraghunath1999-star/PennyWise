@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Sparkles, Loader2, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
-import { GoogleGenAI } from "@google/genai";
 import { SimulationResult } from "@/lib/monteCarlo";
 import { cn } from "@/lib/utils";
 
@@ -26,8 +25,6 @@ export function MilestoneStrategy({ milestone, result }: MilestoneStrategyProps)
     setIsLoading(true);
     setIsOpen(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-      
       const prompt = `
         As a financial expert, provide a step-by-step actionable plan to reach this milestone:
         Milestone: ${milestone.label}
@@ -45,12 +42,18 @@ export function MilestoneStrategy({ milestone, result }: MilestoneStrategyProps)
         Mention how their specific tax bucket allocation or withdrawal strategy helps or hinders this specific milestone.
       `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: prompt
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }]
+        })
       });
+
+      if (!res.ok) throw new Error("Failed to call AI");
+      const data = await res.json();
       
-      setStrategy(response.text || "Unable to generate strategy at this time.");
+      setStrategy(data.text || "Unable to generate strategy at this time.");
     } catch (error) {
       console.error("Strategy Error:", error);
       setStrategy("Error generating strategy. Please try again.");

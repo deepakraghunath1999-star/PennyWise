@@ -2,7 +2,7 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "A user of the RetireSim AI application.",
+      "description": "A user of the PennyWise application.",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "description": "The unique Firebase Auth ID." },

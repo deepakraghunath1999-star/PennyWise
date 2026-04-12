@@ -20,7 +20,7 @@ export function ReportTemplate({ params, result, scenarios = [] }: ReportTemplat
           <p className="text-zinc-400 text-sm">Generated on {new Date().toLocaleDateString()} • DevFest Demo Edition</p>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold text-zinc-100">RetireSim AI</div>
+          <div className="text-2xl font-bold text-zinc-100">PennyWise</div>
           <p className="text-xs text-teal font-bold uppercase tracking-widest">Financial Independence Plan</p>
         </div>
       </div>
@@ -145,7 +145,7 @@ export function ReportTemplate({ params, result, scenarios = [] }: ReportTemplat
       {/* Footer */}
       <div className="pt-12 border-t border-zinc-800 text-center">
         <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em]">
-          Confidential Financial Simulation • RetireSim AI v2.4
+          Confidential Financial Simulation • PennyWise v2.4
         </p>
       </div>
     </div>

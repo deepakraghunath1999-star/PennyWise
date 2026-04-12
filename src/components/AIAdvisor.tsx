@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, Send, Loader2, Bot, User, Info, AlertCircle, TrendingUp, Target } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { GoogleGenAI } from "@google/genai";
 import { SimulationResult, SimulationInput } from "@/lib/monteCarlo";
 import { cn } from "@/lib/utils";
 
@@ -36,12 +35,16 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
         {[
-          { icon: TrendingUp, label: "Scenario Analysis", desc: "Test inflation or early retirement" },
-          { icon: AlertCircle, label: "Stress-Testing", desc: "Market volatility impact" },
-          { icon: Target, label: "Optimization", desc: "Steps to increase success rate" },
-          { icon: Info, label: "Tax Strategies", desc: "Roth & withdrawal guardrails" }
+          { icon: TrendingUp, label: "Scenario Analysis", desc: "Test inflation or early retirement", prompt: "Can you run a scenario analysis for me? I want to see how different inflation rates or an earlier retirement age would affect my plan." },
+          { icon: AlertCircle, label: "Stress-Testing", desc: "Market volatility impact", prompt: "I'd like to stress-test my plan. How would a major market downturn or prolonged high inflation impact my success rate?" },
+          { icon: Target, label: "Optimization", desc: "Steps to increase success rate", prompt: "What specific steps can I take to optimize my plan and increase my success rate and readiness score?" },
+          { icon: Info, label: "Tax Strategies", desc: "Roth & withdrawal guardrails", prompt: "What tax strategies should I consider? Specifically, how should I balance Roth vs Traditional accounts and what withdrawal guardrails do you recommend?" }
         ].map((item, i) => (
-          <div key={i} className="p-3 rounded-xl bg-zinc-900/50 border border-border/50 hover:border-teal/30 transition-all cursor-pointer group">
+          <div 
+            key={i} 
+            onClick={() => handleSend(item.prompt)}
+            className="p-3 rounded-xl bg-zinc-900/50 border border-border/50 hover:border-teal/30 transition-all cursor-pointer group"
+          >
             <div className="flex items-center gap-2 mb-1">
               <item.icon className="w-4 h-4 text-teal group-hover:scale-110 transition-transform" />
               <span className="text-xs font-bold text-zinc-200">{item.label}</span>
@@ -67,17 +70,15 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
     }
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (overrideMessage?: string) => {
+    const userMessage = overrideMessage || input;
+    if (!userMessage.trim() || isLoading) return;
 
-    const userMessage = input;
-    setInput("");
+    if (!overrideMessage) setInput("");
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-      
       const context = result ? `
         Current Simulation Context:
         - Current Age: ${result.currentAge}
@@ -100,11 +101,11 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
         ${params.isLinked ? `- Linked Balance: $${params.linkedBankBalance?.toLocaleString()}` : ''}
       ` : "No simulation data available yet.";
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [
-          { role: 'user', parts: [{ text: `
-            You are a world-class financial advisor specializing in retirement planning and Monte Carlo simulations. 
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system: `You are a world-class financial advisor specializing in retirement planning and Monte Carlo simulations. 
             Use the following context to answer the user's question.
             
             Guidelines:
@@ -114,14 +115,15 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
             4. If the user asks for a scenario, explain the trade-offs clearly using the provided simulation metrics.
             5. Mention the "Wealth Lab" tools (Nudge Engine, Income Optimizer, etc.) if they can help with the user's specific problem.
             
-            ${context}
-            
-            User Question: ${userMessage}
-          ` }] }
-        ],
+            ${context}`,
+          messages: [{ role: 'user', content: userMessage }]
+        })
       });
 
-      setMessages(prev => [...prev, { role: 'assistant', content: response.text || "I'm sorry, I couldn't generate a response." }]);
+      if (!res.ok) throw new Error("Failed to call AI");
+      const data = await res.json();
+
+      setMessages(prev => [...prev, { role: 'assistant', content: data.text || "I'm sorry, I couldn't generate a response." }]);
     } catch (error: any) {
       console.error("AI Error:", error);
       let errorMessage = "I encountered an error while analyzing your data. Please try again.";
