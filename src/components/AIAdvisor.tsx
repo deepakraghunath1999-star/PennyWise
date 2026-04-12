@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Loader2, Bot, User, Info, AlertCircle, TrendingUp, Target } from "lucide-react";
+import { Sparkles, Send, Loader2, Bot, User, Info, AlertCircle, TrendingUp, Target, BrainCircuit } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SimulationResult, SimulationInput } from "@/lib/monteCarlo";
 import { cn } from "@/lib/utils";
+import Markdown from "react-markdown";
 
 interface Message {
   role: 'user' | 'assistant';
@@ -18,45 +19,52 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
   const [messages, setMessages] = useState<Message[]>([]);
 
   const initialMessage = (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="w-10 h-10 rounded-xl bg-teal/20 border border-teal/30 flex items-center justify-center shadow-lg shadow-teal/10">
-          <Sparkles className="w-6 h-6 text-teal" />
+    <div className="space-y-6">
+      <div className="flex items-center gap-4 mb-2">
+        <div className="w-12 h-12 rounded-2xl bg-teal/20 border border-teal/30 flex items-center justify-center shadow-lg shadow-teal/10 relative overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-br from-teal/20 to-transparent animate-pulse" />
+          <BrainCircuit className="w-7 h-7 text-teal relative z-10" />
         </div>
         <div>
-          <h3 className="text-lg font-bold text-zinc-100">Retirement Strategist v2.4</h3>
-          <p className="text-[10px] font-bold text-teal uppercase tracking-widest">AI-Powered Analysis Active</p>
+          <h3 className="text-xl font-bold text-zinc-100 tracking-tight">PennyWise Intelligence</h3>
+          <p className="text-[10px] font-bold text-teal uppercase tracking-[0.2em]">Neural Strategy Engine Active</p>
         </div>
       </div>
       
-      <p className="text-sm text-zinc-300 leading-relaxed">
-        Hello! I've analyzed your current simulation data. I'm ready to help you stress-test your future and optimize your path to financial independence.
+      <p className="text-sm text-zinc-300 leading-relaxed font-medium">
+        Greetings. I've synthesized your financial trajectory across 5,000 Monte Carlo paths. I'm ready to architect your path to absolute financial independence.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
         {[
           { icon: TrendingUp, label: "Scenario Analysis", desc: "Test inflation or early retirement", prompt: "Can you run a scenario analysis for me? I want to see how different inflation rates or an earlier retirement age would affect my plan." },
           { icon: AlertCircle, label: "Stress-Testing", desc: "Market volatility impact", prompt: "I'd like to stress-test my plan. How would a major market downturn or prolonged high inflation impact my success rate?" },
           { icon: Target, label: "Optimization", desc: "Steps to increase success rate", prompt: "What specific steps can I take to optimize my plan and increase my success rate and readiness score?" },
           { icon: Info, label: "Tax Strategies", desc: "Roth & withdrawal guardrails", prompt: "What tax strategies should I consider? Specifically, how should I balance Roth vs Traditional accounts and what withdrawal guardrails do you recommend?" }
         ].map((item, i) => (
-          <div 
+          <motion.div 
             key={i} 
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => handleSend(item.prompt)}
-            className="p-3 rounded-xl bg-zinc-900/50 border border-border/50 hover:border-teal/30 transition-all cursor-pointer group"
+            className="p-4 rounded-2xl bg-zinc-900/80 border border-border/50 hover:border-teal/50 hover:bg-zinc-900 transition-all cursor-pointer group relative overflow-hidden"
           >
-            <div className="flex items-center gap-2 mb-1">
-              <item.icon className="w-4 h-4 text-teal group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-bold text-zinc-200">{item.label}</span>
+            <div className="absolute inset-0 bg-gradient-to-br from-teal/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="flex items-center gap-3 mb-2 relative z-10">
+              <div className="p-2 rounded-lg bg-teal/10 border border-teal/20">
+                <item.icon className="w-4 h-4 text-teal" />
+              </div>
+              <span className="text-xs font-bold text-zinc-100 uppercase tracking-wider">{item.label}</span>
             </div>
-            <p className="text-[10px] text-muted leading-tight">{item.desc}</p>
-          </div>
+            <p className="text-[10px] text-muted leading-relaxed relative z-10">{item.desc}</p>
+          </motion.div>
         ))}
       </div>
 
-      <p className="text-xs text-muted italic pt-2 border-t border-border/30">
-        What's on your mind regarding your financial independence today?
-      </p>
+      <div className="flex items-center gap-2 pt-4 border-t border-border/30">
+        <div className="w-1.5 h-1.5 rounded-full bg-teal animate-pulse" />
+        <p className="text-[10px] text-muted font-bold uppercase tracking-widest">Awaiting strategic inquiry...</p>
+      </div>
     </div>
   );
 
@@ -195,17 +203,16 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
                 {msg.role === 'assistant' ? <Bot className="w-5 h-5 text-teal" /> : <User className="w-5 h-5 text-zinc-400" />}
               </div>
               <div className={cn(
-                "p-5 rounded-[1.5rem] text-sm leading-relaxed shadow-sm",
+                "p-6 rounded-[2rem] text-sm leading-relaxed shadow-xl relative overflow-hidden",
                 msg.role === 'assistant' 
-                  ? "bg-zinc-900/50 border border-border text-zinc-200" 
-                  : "bg-teal text-white shadow-lg shadow-teal/10"
+                  ? "bg-zinc-900/80 border border-border text-zinc-200" 
+                  : "bg-teal text-white shadow-lg shadow-teal/20"
               )}>
-                <div className="whitespace-pre-wrap">
-                  {msg.content.split('\n').map((line, j) => (
-                    <p key={j} className={cn(line.trim() === "" ? "h-4" : "mb-1")}>
-                      {line}
-                    </p>
-                  ))}
+                {msg.role === 'assistant' && (
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-teal/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+                )}
+                <div className="markdown-body relative z-10">
+                  <Markdown>{msg.content}</Markdown>
                 </div>
               </div>
             </motion.div>
@@ -255,7 +262,7 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
             className="flex-1 bg-transparent border-none focus:ring-0 text-sm px-4 py-3 text-zinc-100 placeholder:text-zinc-600"
           />
           <button 
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={!input.trim() || isLoading}
             className="p-3 bg-teal text-white rounded-xl hover:bg-teal/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-teal/20"
           >

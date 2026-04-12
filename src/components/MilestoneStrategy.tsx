@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Sparkles, Loader2, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { Sparkles, Loader2, ChevronDown, ChevronUp, CheckCircle2, BrainCircuit } from "lucide-react";
 import { SimulationResult } from "@/lib/monteCarlo";
 import { cn } from "@/lib/utils";
+import Markdown from "react-markdown";
 
 interface MilestoneStrategyProps {
   milestone: {
@@ -71,36 +72,28 @@ export function MilestoneStrategy({ milestone, result }: MilestoneStrategyProps)
         {isLoading ? (
           <Loader2 className="w-3 h-3 animate-spin" />
         ) : (
-          <Sparkles className="w-3 h-3 group-hover:scale-110 transition-transform" />
+          <BrainCircuit className="w-3 h-3 group-hover:scale-110 transition-transform" />
         )}
         {strategy ? (isOpen ? "Hide Strategy" : "View AI Strategy") : "Get AI-Driven Strategy"}
         {strategy && (isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)}
       </button>
 
       {isOpen && (
-        <div className="mt-4 p-4 rounded-xl bg-zinc-900/50 border border-border animate-in slide-in-from-top-2 duration-300">
+        <div className="mt-4 p-6 rounded-2xl bg-zinc-900/80 border border-border shadow-2xl relative overflow-hidden animate-in slide-in-from-top-2 duration-300">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-teal/5 rounded-full -mr-12 -mt-12 blur-2xl" />
+          
           {isLoading ? (
-            <div className="flex items-center gap-3 py-2">
-              <div className="h-2 w-2 bg-teal rounded-full animate-bounce" />
-              <div className="h-2 w-2 bg-teal rounded-full animate-bounce [animation-delay:0.2s]" />
-              <div className="h-2 w-2 bg-teal rounded-full animate-bounce [animation-delay:0.4s]" />
-              <span className="text-xs text-muted font-medium ml-2">Crafting your personalized plan...</span>
+            <div className="flex items-center gap-3 py-2 relative z-10">
+              <div className="flex gap-1">
+                <div className="h-1.5 w-1.5 bg-teal rounded-full animate-bounce" />
+                <div className="h-1.5 w-1.5 bg-teal rounded-full animate-bounce [animation-delay:0.2s]" />
+                <div className="h-1.5 w-1.5 bg-teal rounded-full animate-bounce [animation-delay:0.4s]" />
+              </div>
+              <span className="text-[10px] text-muted font-bold uppercase tracking-widest ml-2">Synthesizing Strategy...</span>
             </div>
           ) : (
-            <div className="prose prose-invert prose-sm max-w-none">
-              <div className="text-xs text-zinc-300 leading-relaxed space-y-2">
-                {strategy?.split('\n').map((line, i) => {
-                  if (line.trim().startsWith('*') || line.trim().startsWith('-')) {
-                    return (
-                      <div key={i} className="flex gap-3 items-start">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-teal shrink-0 mt-0.5" />
-                        <span>{line.replace(/^[*|-]\s*/, '')}</span>
-                      </div>
-                    );
-                  }
-                  return <p key={i}>{line}</p>;
-                })}
-              </div>
+            <div className="markdown-body relative z-10">
+              <Markdown>{strategy || ""}</Markdown>
             </div>
           )}
         </div>

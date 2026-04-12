@@ -15,7 +15,8 @@ import {
   LogOut,
   Save,
   Trash2,
-  Loader2
+  Loader2,
+  Printer
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { runSimulation, SimulationInput, SimulationResult } from "@/lib/monteCarlo";
@@ -65,6 +66,7 @@ export default function App() {
   const [showScenarioModal, setShowScenarioModal] = useState(false);
   const [newScenarioName, setNewScenarioName] = useState("");
   const [lastRunTimestamp, setLastRunTimestamp] = useState<number>(0);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
 
   const handleRun = useCallback(async () => {
     try {
@@ -217,7 +219,7 @@ export default function App() {
     <div className="flex h-screen bg-background overflow-hidden">
       {/* Sidebar */}
       <aside className={cn(
-        "bg-card border-r border-border transition-all duration-300 flex flex-col z-50",
+        "bg-card border-r border-border transition-all duration-300 flex flex-col z-50 no-print",
         sidebarOpen ? "w-64" : "w-20"
       )}>
         <div className="p-6 flex items-center gap-3 border-b border-border shrink-0">
@@ -286,7 +288,7 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-md flex items-center justify-between px-8 shrink-0">
+        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-md flex items-center justify-between px-8 shrink-0 no-print">
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-bold capitalize">{activeTab}</h2>
             <div className="h-4 w-px bg-border" />
@@ -323,12 +325,19 @@ export default function App() {
             <button 
               onClick={handleExportPDF}
               disabled={isExporting}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-900 border border-border text-xs font-semibold hover:bg-zinc-800 transition-all disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-900 border border-border text-xs font-semibold hover:bg-zinc-800 transition-all disabled:opacity-50 no-print"
             >
               {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {isExporting ? 'Exporting...' : 'Export PDF'}
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal text-white text-xs font-bold hover:bg-teal/90 transition-all shadow-lg shadow-teal/10">
+            <button 
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-900 border border-border text-xs font-semibold hover:bg-zinc-800 transition-all no-print"
+            >
+              <Printer className="w-4 h-4" />
+              Print
+            </button>
+            <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal text-white text-xs font-bold hover:bg-teal/90 transition-all shadow-lg shadow-teal/10 no-print">
               <Share2 className="w-4 h-4" />
               Share Plan
             </button>
@@ -350,7 +359,7 @@ export default function App() {
               {activeTab === 'simulator' && (
                 <div className="max-w-7xl mx-auto space-y-8">
                   <DailyNudge onClick={() => setActiveTab('advisor')} />
-                  <GeminiInsight result={result} lastRunTimestamp={lastRunTimestamp} />
+                  <GeminiInsight result={result} lastRunTimestamp={lastRunTimestamp} onInsightGenerated={setAiInsight} />
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-8">
                     <KPICards result={result} />
@@ -367,7 +376,7 @@ export default function App() {
                     </div>
                   </div>
                   
-                  <div className="space-y-8">
+                  <div className="space-y-8 no-print">
                     <ReadinessScore score={result?.readinessScore || 0} />
                     <ParameterControls 
                       params={params} 
@@ -596,7 +605,7 @@ export default function App() {
 
       {/* Hidden Report Template for PDF Export */}
       <div className="fixed left-[-9999px] top-0">
-        <ReportTemplate params={params} result={result} scenarios={scenarios} />
+        <ReportTemplate params={params} result={result} scenarios={scenarios} aiInsight={aiInsight} />
       </div>
 
       {/* Scenario Modal */}

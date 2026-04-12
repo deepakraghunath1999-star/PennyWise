@@ -9,8 +9,8 @@ export async function generatePDFReport(elementId: string, fileName: string = 'r
   }
 
   try {
-    // Wait a tiny bit for any animations to settle
-    await new Promise(r => setTimeout(r, 300));
+    // Wait for animations and images
+    await new Promise(r => setTimeout(r, 500));
 
     const canvas = await html2canvas(element, {
       scale: 2,
@@ -24,34 +24,17 @@ export async function generatePDFReport(elementId: string, fileName: string = 'r
           clonedElement.style.visibility = 'visible';
           clonedElement.style.height = 'auto';
           clonedElement.style.overflow = 'visible';
-          clonedElement.style.padding = '20px';
+          clonedElement.style.padding = '40px';
+          clonedElement.style.width = '800px';
         }
 
-        // Fix oklch colors which html2canvas doesn't support
-        const styleTags = clonedDoc.getElementsByTagName('style');
-        for (let i = 0; i < styleTags.length; i++) {
-          let css = styleTags[i].innerHTML;
-          if (css.includes('oklch')) {
-            // Replace oklch with hex fallbacks
-            styleTags[i].innerHTML = css
-              .replace(/oklch\(0\.796 0\.141 165\.57\)/g, '#2dd4bf') // teal
-              .replace(/oklch\(0\.841 0\.141 76\.57\)/g, '#fbbf24')  // amber
-              .replace(/oklch\([^)]+\)/g, '#737373');               // fallback gray
-          }
-        }
-
+        // html2canvas doesn't support oklch, replace with simple hex
         clonedDoc.querySelectorAll('*').forEach((el: any) => {
-          if (el.style) {
-            el.style.colorScheme = 'dark';
-            const styles = ['color', 'backgroundColor', 'borderColor', 'fill', 'stroke'];
-            styles.forEach(prop => {
-              const val = el.style[prop];
-              if (val && val.includes('oklch')) {
-                if (val.includes('0.796 0.141 165.57')) el.style[prop] = '#2dd4bf';
-                else if (val.includes('0.841 0.141 76.57')) el.style[prop] = '#fbbf24';
-                else el.style[prop] = '#737373';
-              }
-            });
+          const style = clonedDoc.defaultView?.getComputedStyle(el);
+          if (style) {
+            if (style.color.includes('oklch')) el.style.color = '#ffffff';
+            if (style.backgroundColor.includes('oklch')) el.style.backgroundColor = '#14b8a6';
+            if (style.borderColor.includes('oklch')) el.style.borderColor = '#262626';
           }
         });
       }
@@ -59,23 +42,26 @@ export async function generatePDFReport(elementId: string, fileName: string = 'r
     
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgProps = pdf.getImageProperties(imgData);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
     
-    // Multi-page support
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    let heightLeft = pdfHeight;
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    
+    let heightLeft = imgHeight;
     let position = 0;
 
-    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-    heightLeft -= pageHeight;
+    // First page
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pdfHeight;
 
-    while (heightLeft >= 0) {
-      position = heightLeft - pdfHeight;
+    // Subsequent pages
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
       pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
-      heightLeft -= pageHeight;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
     }
     
     pdf.save(fileName);

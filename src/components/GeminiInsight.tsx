@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 interface GeminiInsightProps {
   result: SimulationResult | null;
   lastRunTimestamp?: number;
+  onInsightGenerated?: (insight: string) => void;
 }
 
-export function GeminiInsight({ result, lastRunTimestamp }: GeminiInsightProps) {
+export function GeminiInsight({ result, lastRunTimestamp, onInsightGenerated }: GeminiInsightProps) {
   const [insight, setInsight] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +43,9 @@ export function GeminiInsight({ result, lastRunTimestamp }: GeminiInsightProps) 
         if (!res.ok) throw new Error("Failed to call AI");
         const data = await res.json();
         
-        setInsight(data.text || "Keep optimizing your plan.");
+        const generatedInsight = data.text || "Keep optimizing your plan.";
+        setInsight(generatedInsight);
+        if (onInsightGenerated) onInsightGenerated(generatedInsight);
       } catch (err: any) {
         console.error("Insight Error:", err);
         let msg = "Could not generate insight.";
