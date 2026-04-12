@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { 
+  NudgeEngine, 
+  IncomeOptimizer, 
+  BankLink, 
+  ExpenseOptimizer 
+} from "./components/WealthLab";
+import { 
   LayoutDashboard, 
   History, 
   Sparkles, 
@@ -16,7 +22,9 @@ import {
   Save,
   Trash2,
   Loader2,
-  Printer
+  Link as LinkIcon,
+  ShieldAlert,
+  Briefcase
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { runSimulation, SimulationInput, SimulationResult } from "@/lib/monteCarlo";
@@ -35,7 +43,7 @@ import { generatePDFReport } from "@/lib/pdfExport";
 import { useAuth } from "@/lib/AuthContext";
 import { db, collection, addDoc, query, where, orderBy, onSnapshot, doc, setDoc, deleteDoc, handleFirestoreError, OperationType } from "@/lib/firebase";
 
-type Tab = 'simulator' | 'scenarios' | 'advisor' | 'milestones' | 'history' | 'wealth-lab';
+type Tab = 'simulator' | 'scenarios' | 'advisor' | 'milestones' | 'history' | 'nudges' | 'income' | 'link' | 'expenses';
 
 export default function App() {
   const { user, loading, signIn, signOut } = useAuth();
@@ -67,6 +75,7 @@ export default function App() {
   const [newScenarioName, setNewScenarioName] = useState("");
   const [lastRunTimestamp, setLastRunTimestamp] = useState<number>(0);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [xp, setXp] = useState(1240);
 
   const handleRun = useCallback(async () => {
     try {
@@ -197,7 +206,10 @@ export default function App() {
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'simulator', label: 'Simulator', icon: LayoutDashboard },
-    { id: 'wealth-lab', label: 'Wealth Lab', icon: Zap },
+    { id: 'nudges', label: 'Nudge Engine', icon: Zap },
+    { id: 'income', label: 'Income Growth', icon: Briefcase },
+    { id: 'link', label: 'Bank Link', icon: LinkIcon },
+    { id: 'expenses', label: 'Expense Audit', icon: ShieldAlert },
     { id: 'advisor', label: 'AI Advisor', icon: Sparkles },
     { id: 'milestones', label: 'Milestones', icon: Target },
     { id: 'scenarios', label: 'Scenarios', icon: TrendingUp },
@@ -296,10 +308,6 @@ export default function App() {
               <span className="w-2 h-2 rounded-full bg-teal animate-pulse" />
               Live Simulation
             </div>
-            <div className="h-4 w-px bg-border" />
-            <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-amber/10 border border-amber/20 text-[10px] font-bold text-amber uppercase tracking-widest">
-              DevFest Demo
-            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -329,13 +337,6 @@ export default function App() {
             >
               {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               {isExporting ? 'Exporting...' : 'Export PDF'}
-            </button>
-            <button 
-              onClick={() => window.print()}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-900 border border-border text-xs font-semibold hover:bg-zinc-800 transition-all no-print"
-            >
-              <Printer className="w-4 h-4" />
-              Print
             </button>
             <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-teal text-white text-xs font-bold hover:bg-teal/90 transition-all shadow-lg shadow-teal/10 no-print">
               <Share2 className="w-4 h-4" />
@@ -390,12 +391,29 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'wealth-lab' && (
-              <WealthLab 
+            {activeTab === 'nudges' && (
+              <NudgeEngine 
                 params={params} 
                 result={result} 
+                onXpGain={(amt) => setXp(prev => prev + amt)} 
                 onUpdateParams={(newParams) => setParams(prev => ({ ...prev, ...newParams }))} 
               />
+            )}
+
+            {activeTab === 'income' && (
+              <IncomeOptimizer params={params} result={result} />
+            )}
+
+            {activeTab === 'link' && (
+              <BankLink 
+                params={params} 
+                onUpdateParams={(newParams) => setParams(prev => ({ ...prev, ...newParams }))} 
+                onXpGain={(amt) => setXp(prev => prev + amt)} 
+              />
+            )}
+
+            {activeTab === 'expenses' && (
+              <ExpenseOptimizer params={params} result={result} />
             )}
 
             {activeTab === 'advisor' && (

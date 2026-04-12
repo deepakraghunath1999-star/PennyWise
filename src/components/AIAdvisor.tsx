@@ -137,7 +137,7 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
       let errorMessage = "I encountered an error while analyzing your data. Please try again.";
       
       if (error?.message?.includes('quota') || error?.message?.includes('429')) {
-        errorMessage = "The AI Advisor is currently at its capacity (API Quota Exceeded). As a DevFest Demo, you can continue using the simulator, or try again in a few minutes. If you are a developer, you can provide your own Gemini API key in the environment settings.";
+        errorMessage = "The AI Advisor is currently at its capacity (API Quota Exceeded). You can continue using the simulator, or try again in a few minutes. If you are a developer, you can provide your own Gemini API key in the environment settings.";
       }
       
       setMessages(prev => [...prev, { role: 'assistant', content: errorMessage }]);
@@ -160,10 +160,6 @@ export function AIAdvisor({ result, params }: AIAdvisorProps) {
               <p className="text-[10px] text-muted uppercase tracking-widest font-bold">Analysis Mode Active</p>
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-border">
-          <Sparkles className="w-3 h-3 text-amber" />
-          <span className="text-[10px] font-bold text-amber uppercase tracking-widest">DevFest Demo</span>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-border">
           <Info className="w-3 h-3 text-muted" />

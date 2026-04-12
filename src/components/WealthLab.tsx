@@ -26,7 +26,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 
 // Set up pdfjs worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+const PDFJS_VERSION = pdfjsLib.version || '5.6.205';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
 import { cn } from "@/lib/utils";
 import { SimulationInput, SimulationResult } from "@/lib/monteCarlo";
 import { motion, AnimatePresence } from "motion/react";
@@ -114,7 +115,7 @@ interface NudgeEngineProps extends WealthLabProps {
   onXpGain: (amt: number) => void;
 }
 
-function NudgeEngine({ params, result, onXpGain, onUpdateParams }: NudgeEngineProps) {
+export function NudgeEngine({ params, result, onXpGain, onUpdateParams }: NudgeEngineProps) {
   const [showProofModal, setShowProofModal] = useState<string | null>(null);
   const [proofText, setProofText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -458,7 +459,7 @@ function NudgeEngine({ params, result, onXpGain, onUpdateParams }: NudgeEnginePr
   );
 }
 
-function IncomeOptimizer({ params, result }: WealthLabProps) {
+export function IncomeOptimizer({ params, result }: WealthLabProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<any | null>(null);
   const [resumeText, setResumeText] = useState("");
@@ -470,41 +471,63 @@ function IncomeOptimizer({ params, result }: WealthLabProps) {
     if (!file) return;
 
     setIsUploading(true);
+    const fileName = file.name.toLowerCase();
+    
     try {
       const reader = new FileReader();
       
-      if (file.type === "application/pdf") {
+      if (file.type === "application/pdf" || fileName.endsWith(".pdf")) {
         reader.onload = async (event) => {
-          const typedarray = new Uint8Array(event.target?.result as ArrayBuffer);
-          const pdf = await pdfjsLib.getDocument(typedarray).promise;
-          let fullText = "";
-          for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items.map((item: any) => item.str).join(" ");
-            fullText += pageText + "\n";
+          try {
+            const typedarray = new Uint8Array(event.target?.result as ArrayBuffer);
+            const loadingTask = pdfjsLib.getDocument({ data: typedarray });
+            const pdf = await loadingTask.promise;
+            let fullText = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items
+                .map((item: any) => ('str' in item ? item.str : ""))
+                .join(" ");
+              fullText += pageText + "\n";
+            }
+            setResumeText(fullText);
+          } catch (err) {
+            console.error("PDF Parsing Error:", err);
+            alert("Failed to parse PDF. Please ensure it's not password protected or try copying the text manually.");
+          } finally {
+            setIsUploading(false);
+            // Reset input so the same file can be uploaded again if needed
+            if (fileInputRef.current) fileInputRef.current.value = "";
           }
-          setResumeText(fullText);
-          setIsUploading(false);
         };
         reader.readAsArrayBuffer(file);
-      } else if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      } else if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || fileName.endsWith(".docx")) {
         reader.onload = async (event) => {
-          const arrayBuffer = event.target?.result as ArrayBuffer;
-          const result = await mammoth.extractRawText({ arrayBuffer });
-          setResumeText(result.value);
-          setIsUploading(false);
+          try {
+            const arrayBuffer = event.target?.result as ArrayBuffer;
+            const result = await mammoth.extractRawText({ arrayBuffer });
+            setResumeText(result.value);
+          } catch (err) {
+            console.error("DOCX Parsing Error:", err);
+            alert("Failed to parse Word document. Please try copying the text manually.");
+          } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+          }
         };
         reader.readAsArrayBuffer(file);
-      } else if (file.type === "text/plain") {
+      } else if (file.type === "text/plain" || fileName.endsWith(".txt")) {
         reader.onload = (event) => {
           setResumeText(event.target?.result as string);
           setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = "";
         };
         reader.readAsText(file);
       } else {
         alert("Unsupported file type. Please upload PDF, DOCX, or TXT.");
         setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     } catch (err) {
       console.error("File upload error:", err);
@@ -582,9 +605,29 @@ function IncomeOptimizer({ params, result }: WealthLabProps) {
       const aiData = await res.json();
       
       const text = aiData.text || "{}";
-      const cleaned = text.replace(/```json|```/g, "").trim();
-      const data = JSON.parse(cleaned);
-      setAnalysis(data);
+      // More robust JSON extraction
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const cleaned = jsonMatch ? jsonMatch[0] : text.replace(/```json|```/g, "").trim();
+      
+      try {
+        const data = JSON.parse(cleaned);
+        setAnalysis(data);
+      } catch (parseErr) {
+        console.error("Parse Error:", parseErr, "Raw Text:", text);
+        // Fallback to a structured object if parsing fails but we have text
+        setAnalysis({
+          title: "Analysis Results",
+          summary: text.slice(0, 200) + "...",
+          sections: [
+            {
+              title: "Detailed Insights",
+              content: text,
+              impact: "High Potential",
+              steps: ["Review the full analysis above"]
+            }
+          ]
+        });
+      }
     } catch (err) {
       console.error(err);
       alert("Error running analysis. Please ensure your resume text is valid.");
@@ -713,7 +756,7 @@ function IncomeOptimizer({ params, result }: WealthLabProps) {
   );
 }
 
-function BankLink({ params, onUpdateParams, onXpGain }: { params: SimulationInput, onUpdateParams?: (p: Partial<SimulationInput>) => void, onXpGain: (a: number) => void }) {
+export function BankLink({ params, onUpdateParams, onXpGain }: { params: SimulationInput, onUpdateParams?: (p: Partial<SimulationInput>) => void, onXpGain: (a: number) => void }) {
   const [isLinking, setIsLinking] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -749,11 +792,6 @@ function BankLink({ params, onUpdateParams, onXpGain }: { params: SimulationInpu
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="p-8 rounded-[2rem] glass border border-border bg-gradient-to-br from-blue-400/5 to-transparent space-y-8 relative overflow-hidden">
-        <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-blue-400/10 border border-blue-400/20 flex items-center gap-2">
-          <Sparkles className="w-3 h-3 text-blue-400" />
-          <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">DevFest Demo Mode</span>
-        </div>
-
         <div className="flex flex-col md:flex-row gap-8 items-start">
           <div className="w-16 h-16 rounded-2xl bg-blue-400/10 border border-blue-400/20 flex items-center justify-center shrink-0">
             <Building2 className="w-8 h-8 text-blue-400" />
@@ -846,7 +884,7 @@ function BankLink({ params, onUpdateParams, onXpGain }: { params: SimulationInpu
   );
 }
 
-function ExpenseOptimizer({ params, result }: WealthLabProps) {
+export function ExpenseOptimizer({ params, result }: WealthLabProps) {
   const [isAuditing, setIsAuditing] = useState(false);
   const [audit, setAudit] = useState<string | null>(null);
 
@@ -893,11 +931,6 @@ function ExpenseOptimizer({ params, result }: WealthLabProps) {
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="p-8 rounded-[2rem] glass border border-border bg-gradient-to-br from-blue-400/5 to-transparent relative overflow-hidden">
-        <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-blue-400/10 border border-blue-400/20 flex items-center gap-2">
-          <Sparkles className="w-3 h-3 text-blue-400" />
-          <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">DevFest Demo Mode</span>
-        </div>
-
         <div className="flex flex-col md:flex-row gap-8 items-start">
           <div className="w-16 h-16 rounded-2xl bg-blue-400/10 border border-blue-400/20 flex items-center justify-center shrink-0">
             <ShieldAlert className="w-8 h-8 text-blue-400" />
