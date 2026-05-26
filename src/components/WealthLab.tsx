@@ -189,7 +189,10 @@ export function NudgeEngine({ params, result, onXpGain, onUpdateParams }: NudgeE
         })
       });
 
-      if (!res.ok) throw new Error("Failed to call AI");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.groqError || "Failed to generate nudge.");
+      }
       const aiData = await res.json();
       
       const text = aiData.text || "{}";
@@ -601,7 +604,10 @@ export function IncomeOptimizer({ params, result }: WealthLabProps) {
         })
       });
 
-      if (!res.ok) throw new Error("Failed to call AI");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.groqError || "Failed to generate AI analysis.");
+      }
       const aiData = await res.json();
       
       const text = aiData.text || "{}";
@@ -628,9 +634,9 @@ export function IncomeOptimizer({ params, result }: WealthLabProps) {
           ]
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error running analysis. Please ensure your resume text is valid.");
+      alert(`Error running analysis: ${err.message || "Please ensure your resume text is valid."}`);
     } finally {
       setIsAnalyzing(false);
     }
@@ -912,14 +918,17 @@ export function ExpenseOptimizer({ params, result }: WealthLabProps) {
         })
       });
 
-      if (!res.ok) throw new Error("Failed to call AI");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.groqError || "Failed to call AI");
+      }
       const aiData = await res.json();
       
       setAudit(aiData.text || "Audit unavailable.");
     } catch (err: any) {
       console.error(err);
-      let msg = "Error running audit.";
-      if (err?.message?.includes('quota') || err?.message?.includes('429')) {
+      let msg = err.message || "Error running audit.";
+      if (msg.includes('quota') || msg.includes('429')) {
         msg = "AI Audit is currently at capacity (Quota Exceeded). Please try again later or provide your own API key.";
       }
       setAudit(msg);

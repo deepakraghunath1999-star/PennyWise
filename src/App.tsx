@@ -1,29 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { 
-  NudgeEngine, 
-  IncomeOptimizer, 
-  BankLink, 
-  ExpenseOptimizer 
+  IncomeOptimizer 
 } from "./components/WealthLab";
 import { 
   LayoutDashboard, 
   History, 
   Sparkles, 
   TrendingUp, 
-  Target, 
   Download, 
   Share2,
   Menu,
   X,
-  ChevronRight,
   Zap,
   LogIn,
   LogOut,
   Save,
   Trash2,
   Loader2,
-  Link as LinkIcon,
-  ShieldAlert,
   Briefcase
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -34,16 +27,13 @@ import { ReadinessScore } from "@/components/ReadinessScore";
 import { FanChart } from "@/components/FanChart";
 import { AIAdvisor } from "@/components/AIAdvisor";
 import { GroqInsight } from "@/components/GroqInsight";
-import { MilestoneStrategy } from "@/components/MilestoneStrategy";
-import { WealthLab } from "@/components/WealthLab";
-import { DailyNudge } from "@/components/DailyNudge";
 import { ReportTemplate } from "@/components/ReportTemplate";
 import { cn, formatCurrency } from "@/lib/utils";
 import { generatePDFReport } from "@/lib/pdfExport";
 import { useAuth } from "@/lib/AuthContext";
-import { db, collection, addDoc, query, where, orderBy, onSnapshot, doc, setDoc, deleteDoc, handleFirestoreError, OperationType } from "@/lib/firebase";
 
-type Tab = 'simulator' | 'scenarios' | 'advisor' | 'milestones' | 'history' | 'nudges' | 'income' | 'link' | 'expenses';
+
+type Tab = 'simulator' | 'scenarios' | 'advisor' | 'history' | 'income';
 
 export default function App() {
   const { user, loading, signIn, signOut } = useAuth();
@@ -102,7 +92,7 @@ export default function App() {
     }
   }, [params, isAutoRunning, handleRun]);
 
-  // Listen to History and Scenarios
+  // Listen to History and Scenarios (local storage)
   useEffect(() => {
     if (!user) {
       setSimHistory([]);
@@ -110,34 +100,40 @@ export default function App() {
       return;
     }
 
-    const simsQuery = query(
-      collection(db, 'users', user.uid, 'simulations'),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubSims = onSnapshot(simsQuery, (snapshot) => {
-      setSimHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'simulations'));
+    const loadLocalData = () => {
+      try {
+        const storedSims = localStorage.getItem(`pennywise_${user.uid}_simulations`);
+        if (storedSims) {
+          setSimHistory(JSON.parse(storedSims));
+        } else {
+          setSimHistory([]);
+        }
 
-    const scenariosQuery = query(
-      collection(db, 'users', user.uid, 'scenarios'),
-      orderBy('createdAt', 'desc')
-    );
-    const unsubScenarios = onSnapshot(scenariosQuery, (snapshot) => {
-      setScenarios(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'scenarios'));
-
-    return () => {
-      unsubSims();
-      unsubScenarios();
+        const storedScenarios = localStorage.getItem(`pennywise_${user.uid}_scenarios`);
+        if (storedScenarios) {
+          setScenarios(JSON.parse(storedScenarios));
+        } else {
+          setScenarios([]);
+        }
+      } catch (err) {
+        console.error("Failed to load local data:", err);
+      }
     };
+
+    loadLocalData();
+
+    window.addEventListener('storage', loadLocalData);
+    return () => window.removeEventListener('storage', loadLocalData);
   }, [user]);
 
   const saveSimulation = async () => {
     if (!user || !result) return;
     setIsSaving(true);
     try {
-      const path = `users/${user.uid}/simulations`;
-      await addDoc(collection(db, path), {
+      const existing = localStorage.getItem(`pennywise_${user.uid}_simulations`);
+      const list = existing ? JSON.parse(existing) : [];
+      const newSim = {
+        id: 'sim_' + Date.now().toString(36),
         userId: user.uid,
         name: `Simulation ${new Date().toLocaleDateString()}`,
         params,
@@ -147,9 +143,12 @@ export default function App() {
           projectedAtRetirement: result.projectedAtRetirement
         },
         createdAt: new Date().toISOString()
-      });
+      };
+      const updated = [newSim, ...list];
+      localStorage.setItem(`pennywise_${user.uid}_simulations`, JSON.stringify(updated));
+      setSimHistory(updated);
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'simulations');
+      console.error("Local Save Simulation Error:", err);
     } finally {
       setIsSaving(false);
     }
@@ -159,8 +158,10 @@ export default function App() {
     if (!user || !result || !newScenarioName.trim()) return;
 
     try {
-      const path = `users/${user.uid}/scenarios`;
-      await addDoc(collection(db, path), {
+      const existing = localStorage.getItem(`pennywise_${user.uid}_scenarios`);
+      const list = existing ? JSON.parse(existing) : [];
+      const newScenario = {
+        id: 'scen_' + Date.now().toString(36),
         userId: user.uid,
         name: newScenarioName.trim(),
         params,
@@ -170,20 +171,34 @@ export default function App() {
           projectedAtRetirement: result.projectedAtRetirement
         },
         createdAt: new Date().toISOString()
-      });
+      };
+      const updated = [newScenario, ...list];
+      localStorage.setItem(`pennywise_${user.uid}_scenarios`, JSON.stringify(updated));
+      setScenarios(updated);
       setShowScenarioModal(false);
       setNewScenarioName("");
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'scenarios');
+      console.error("Local Save Scenario Error:", err);
     }
   };
 
   const deleteItem = async (type: 'simulations' | 'scenarios', id: string) => {
     if (!user) return;
     try {
-      await deleteDoc(doc(db, 'users', user.uid, type, id));
+      const storageKey = `pennywise_${user.uid}_${type}`;
+      const existing = localStorage.getItem(storageKey);
+      if (existing) {
+        const list = JSON.parse(existing);
+        const updated = list.filter((item: any) => item.id !== id);
+        localStorage.setItem(storageKey, JSON.stringify(updated));
+        if (type === 'simulations') {
+          setSimHistory(updated);
+        } else {
+          setScenarios(updated);
+        }
+      }
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, type);
+      console.error("Local Delete Item Error:", err);
     }
   };
 
@@ -206,12 +221,8 @@ export default function App() {
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'simulator', label: 'Simulator', icon: LayoutDashboard },
-    { id: 'nudges', label: 'Nudge Engine', icon: Zap },
     { id: 'income', label: 'Income Growth', icon: Briefcase },
-    { id: 'link', label: 'Bank Link', icon: LinkIcon },
-    { id: 'expenses', label: 'Expense Audit', icon: ShieldAlert },
     { id: 'advisor', label: 'AI Advisor', icon: Sparkles },
-    { id: 'milestones', label: 'Milestones', icon: Target },
     { id: 'scenarios', label: 'Scenarios', icon: TrendingUp },
     { id: 'history', label: 'History', icon: History },
   ];
@@ -359,167 +370,46 @@ export default function App() {
             >
               {activeTab === 'simulator' && (
                 <div className="max-w-7xl mx-auto space-y-8">
-                  <DailyNudge onClick={() => setActiveTab('advisor')} />
                   <GroqInsight result={result} lastRunTimestamp={lastRunTimestamp} onInsightGenerated={setAiInsight} />
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <div className="lg:col-span-2 space-y-8">
-                    <KPICards result={result} />
-                    <div className="p-6 rounded-2xl glass border border-border">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">Wealth Projection</h3>
-                        <div className="flex items-center gap-4 text-[10px] font-mono uppercase tracking-widest text-muted">
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-teal" /> 90th</div>
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber" /> Median</div>
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red" /> 10th</div>
+                    <div className="lg:col-span-2 space-y-8">
+                      <KPICards result={result} />
+                      <div className="p-6 rounded-2xl glass border border-border">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold">Wealth Projection</h3>
+                          <div className="flex items-center gap-4 text-[10px] font-mono uppercase tracking-widest text-muted">
+                            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-teal" /> 90th</div>
+                            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber" /> Median</div>
+                            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red" /> 10th</div>
+                          </div>
                         </div>
+                        <FanChart result={result} />
                       </div>
-                      <FanChart result={result} />
                     </div>
-                  </div>
-                  
-                  <div className="space-y-8 no-print">
-                    <ReadinessScore score={result?.readinessScore || 0} />
-                    <ParameterControls 
-                      params={params} 
-                      setParams={setParams} 
-                      isAutoRunning={isAutoRunning}
-                      setIsAutoRunning={setIsAutoRunning}
-                      onRun={handleRun}
-                    />
+                    
+                    <div className="space-y-8 no-print">
+                      <ReadinessScore score={result?.readinessScore || 0} />
+                      <ParameterControls 
+                        params={params} 
+                        setParams={setParams} 
+                        isAutoRunning={isAutoRunning}
+                        setIsAutoRunning={setIsAutoRunning}
+                        onRun={handleRun}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {activeTab === 'nudges' && (
-              <NudgeEngine 
-                params={params} 
-                result={result} 
-                onXpGain={(amt) => setXp(prev => prev + amt)} 
-                onUpdateParams={(newParams) => setParams(prev => ({ ...prev, ...newParams }))} 
-              />
-            )}
+              {activeTab === 'income' && (
+                <IncomeOptimizer params={params} result={result} />
+              )}
 
-            {activeTab === 'income' && (
-              <IncomeOptimizer params={params} result={result} />
-            )}
-
-            {activeTab === 'link' && (
-              <BankLink 
-                params={params} 
-                onUpdateParams={(newParams) => setParams(prev => ({ ...prev, ...newParams }))} 
-                onXpGain={(amt) => setXp(prev => prev + amt)} 
-              />
-            )}
-
-            {activeTab === 'expenses' && (
-              <ExpenseOptimizer params={params} result={result} />
-            )}
-
-            {activeTab === 'advisor' && (
-              <div className="max-w-4xl mx-auto">
-                <AIAdvisor result={result} params={params} />
-              </div>
-            )}
-
-            {activeTab === 'milestones' && (
-              <div className="max-w-4xl mx-auto space-y-8 pb-20">
-                {!result ? (
-                  <div className="p-12 text-center glass rounded-[2.5rem] border-dashed">
-                    <Target className="w-12 h-12 text-muted mx-auto mb-4 opacity-20" />
-                    <h3 className="text-xl font-bold mb-2">Simulation Required</h3>
-                    <p className="text-muted text-sm max-w-xs mx-auto mb-8">Run your simulation in the Simulator tab to generate your personalized financial roadmap.</p>
-                    <button 
-                      onClick={() => setActiveTab('simulator')}
-                      className="px-6 py-3 bg-teal text-white rounded-xl font-bold hover:bg-teal/90 transition-all"
-                    >
-                      Go to Simulator
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-2xl font-bold">Financial Roadmap</h2>
-                        <p className="text-muted text-sm">Your journey to financial independence, step by step.</p>
-                      </div>
-                      <div className="px-4 py-2 rounded-xl bg-teal/10 border border-teal/20 text-teal text-xs font-bold">
-                        {result.readinessScore}% Ready
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      {[
-                        { label: "Emergency Fund (3 Months)", target: (Number(params.annualIncome || 0) / 12) * 3, icon: Zap, desc: "Safety net for unexpected expenses." },
-                        { label: "First $100K Milestone", target: 100000, icon: Target, desc: "The hardest milestone in wealth building." },
-                        { label: "Coast FIRE", target: result.requiredNestEgg * 0.4, icon: TrendingUp, desc: "No more contributions needed to retire at 65." },
-                        { label: "Lean FIRE", target: result.requiredNestEgg * 0.7, icon: Sparkles, desc: "Basic expenses covered by investments." },
-                        { label: "Financial Independence", target: result.requiredNestEgg, icon: Target, desc: "Your ultimate nest egg goal." },
-                      ].map((milestone, i) => {
-                        const path = result.pctPaths.p50;
-                        const achievement = path.find(p => p.balance >= milestone.target);
-                        const progress = Math.min(100, (params.currentSavings / milestone.target) * 100);
-                        const isAchieved = params.currentSavings >= milestone.target;
-                        
-                        return (
-                          <div key={i} className={cn(
-                            "p-6 rounded-3xl glass border transition-all duration-500",
-                            isAchieved ? "border-teal/30 bg-teal/5" : "border-border hover:border-zinc-700"
-                          )}>
-                            <div className="flex items-center gap-6">
-                              <div className={cn(
-                                "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border transition-all duration-500",
-                                isAchieved ? "bg-teal text-white border-teal shadow-lg shadow-teal/20" : "bg-zinc-900 border-border text-muted"
-                              )}>
-                                <milestone.icon className="w-7 h-7" />
-                              </div>
-                              <div className="flex-1 space-y-3">
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <div className="flex items-center gap-2">
-                                      <h4 className="font-bold text-lg text-zinc-100">{milestone.label}</h4>
-                                      {isAchieved && <div className="px-2 py-0.5 rounded-full bg-teal/20 text-teal text-[10px] font-bold uppercase">Achieved</div>}
-                                    </div>
-                                    <p className="text-xs text-muted">{milestone.desc}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="text-xs text-muted font-mono uppercase tracking-widest">Target</div>
-                                    <div className="text-sm font-bold text-zinc-100">{formatCurrency(milestone.target)}</div>
-                                    {achievement && !isAchieved && (
-                                      <div className="text-[10px] text-teal font-bold mt-1">Est. Age {achievement.age}</div>
-                                    )}
-                                  </div>
-                                </div>
-                                
-                                <div className="space-y-1.5">
-                                  <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted">
-                                    <span>Progress</span>
-                                    <span>{progress.toFixed(0)}%</span>
-                                  </div>
-                                  <div className="h-2.5 w-full bg-zinc-900 rounded-full overflow-hidden border border-border/50 p-0.5">
-                                    <div 
-                                      className={cn(
-                                        "h-full rounded-full transition-all duration-1000 ease-out",
-                                        isAchieved ? "bg-teal" : "bg-zinc-700"
-                                      )} 
-                                      style={{ width: `${progress}%` }} 
-                                    />
-                                  </div>
-                                </div>
-
-                                {!isAchieved && (
-                                  <MilestoneStrategy milestone={milestone} result={result} />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+              {activeTab === 'advisor' && (
+                <div className="max-w-4xl mx-auto">
+                  <AIAdvisor result={result} params={params} />
+                </div>
+              )}
 
             {activeTab === 'scenarios' && (
               <div className="max-w-5xl mx-auto space-y-8">

@@ -40,7 +40,10 @@ export function GroqInsight({ result, lastRunTimestamp, onInsightGenerated }: Gr
           })
         });
 
-        if (!res.ok) throw new Error("Failed to call AI");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.groqError || "Failed to generate AI insights.");
+        }
         const data = await res.json();
         
         const generatedInsight = data.text || "Keep optimizing your plan.";
@@ -48,8 +51,8 @@ export function GroqInsight({ result, lastRunTimestamp, onInsightGenerated }: Gr
         if (onInsightGenerated) onInsightGenerated(generatedInsight);
       } catch (err: any) {
         console.error("Insight Error:", err);
-        let msg = "Could not generate insight.";
-        if (err?.message?.includes('quota') || err?.message?.includes('429')) {
+        let msg = err.message || "Could not generate insight.";
+        if (msg.includes('quota') || msg.includes('429')) {
           msg = "AI Insight is at capacity. Add your own API key in Settings.";
         }
         setError(msg);
